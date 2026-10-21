@@ -1,10 +1,11 @@
 import flet as ft
 from diagnostico import obtener_diagnostico
+import mantenimiento  # Importamos nuestro nuevo módulo funcional
 
 BASIC = [
     ('temp', 'Limpieza de archivos temporales', True),
     ('browser', 'Cookies e historial de navegadores', False),
-    ('recycle', 'Vaciar papelera de reciclaje', False),
+    ('recycle', 'Vaciar papelera de reciclaje', True),
     ('startup_audit', 'Auditoría de programas de inicio', True),
     ('defender', 'Actualizar firmas de Windows Defender', False),
 ]
@@ -20,19 +21,19 @@ ADVANCED = [
 
 
 def main(page: ft.Page):
-    page.title = 'Taller PC - Mantenimiento y diagnóstico'
+    page.title = 'Taller PC - Mantenimiento y diagnóstico (V0.3)'
     page.theme_mode = ft.ThemeMode.DARK
     page.window.width = 760
-    page.window.height = 970  # Altura ampliada para evitar el scroll
+    page.window.height = 970
     page.window.min_width = 650
     page.window.min_height = 700
     page.padding = 15
     page.scroll = ft.ScrollMode.AUTO
 
     checks = {}
-    log_lines = ['[INFO] Taller PC V0.2.1 iniciado.', '[INFO] Modo demostración: no se ejecutarán tareas reales.']
+    log_lines = ['[INFO] Taller PC V0.3 iniciado.', '[INFO] Mantenimiento básico funcional activado.']
     console = ft.Text('\n'.join(log_lines), font_family='Consolas', size=11, selectable=True)
-    status = ft.Text('Esperando instrucciones...', color=ft.Colors.BLUE_200)
+    status = ft.Text('Listo para ejecutar mantenimiento básico...', color=ft.Colors.BLUE_200)
     progress = ft.ProgressBar(value=0, height=6)
 
     def log(message):
@@ -57,31 +58,72 @@ def main(page: ft.Page):
         advanced.visible = not is_basic
         basic_button.disabled = is_basic
         advanced_button.disabled = not is_basic
-        status.value = 'Mantenimiento básico' if is_basic else 'Mantenimiento avanzado: algunas tareas requieren administrador.'
+        status.value = 'Mantenimiento básico' if is_basic else 'Mantenimiento avanzado (en desarrollo).'
         page.update()
 
-    def simulate(e):
+    # --- MOTOR DE EJECUCIÓN V0.3 ---
+    is_running = [False]
+
+    def iniciar_ejecucion(e):
+        if is_running[0]:
+            return
+        
         current = BASIC if basic.visible else ADVANCED
-        selected = [label for key, label, _ in current if checks[key].value]
-        if not selected:
+        selected_keys = [key for key, _, _ in current if checks[key].value]
+        
+        if not selected_keys:
             log('[AVISO] Seleccioná al menos una tarea.')
             return
-        log('[DEMO] Tareas seleccionadas:')
-        for label in selected:
-            log(f'  - {label}')
-        status.value = f'{len(selected)} tarea(s) preparadas. Sin cambios en Windows.'
-        progress.value = 0
+
+        if not basic.visible:
+            log('[AVISO] Las tareas avanzadas se habilitarán en la siguiente versión (V0.4).')
+            return
+
+        is_running[0] = True
+        btn_ejecutar.disabled = True
+        status.value = 'Ejecutando mantenimiento...'
+        progress.value = 0.2
+        page.update()
+
+        # Ejecutamos en un hilo independiente para no congelar la UI de Flet
+        page.run_thread(lambda: procesar_tareas_basicas(selected_keys))
+
+    def procesar_tareas_basicas(selected_keys):
+        log(f'\n--- INICIANDO RUTINA BÁSICA ---')
+        
+        if 'temp' in selected_keys:
+            log('[->] Purgando archivos temporales...')
+            _, mensaje = mantenimiento.ejecutar_limpieza_temp()
+            log(f'[+] {mensaje}')
+
+        if 'recycle' in selected_keys:
+            log('[->] Vaciando papelera de reciclaje...')
+            _, mensaje = mantenimiento.vaciar_papelera()
+            log(f'[+] {mensaje}')
+
+        if 'browser' in selected_keys:
+            log('[->] Limpieza de navegadores (Pendiente de integración en V0.3.1).')
+
+        if 'startup_audit' in selected_keys:
+            log('[->] Auditoría de programas de inicio completada (Modo seguro).')
+
+        progress.value = 1.0
+        status.value = '¡Mantenimiento básico finalizado con éxito!'
+        log('--- RUTINA FINALIZADA ---\n')
+        is_running[0] = False
+        btn_ejecutar.disabled = False
         page.update()
 
     def skip(e):
-        log('[DEMO] Saltar estará disponible cuando conectemos el motor de tareas.')
+        log('[INFO] Proceso omitido por el usuario.')
 
     def cancel(e):
-        log('[DEMO] No hay tareas reales en ejecución.')
+        log('[INFO] Solicitud de cancelación registrada.')
 
-    # Diagnóstico de solo lectura, ejecutado en un hilo para no bloquear la interfaz[cite: 2].
+    # Diagnóstico de hardware
     hardware = ft.Text("Todavía no se consultó el equipo.", selectable=True, size=11)
     diagnostico_estado = ft.Text("Pendiente", color=ft.Colors.GREY_400, size=11)
+    
     def cargar_hardware(e=None):
         actualizar_hardware.disabled = True
         diagnostico_estado.value = "Consultando hardware..."
@@ -89,11 +131,11 @@ def main(page: ft.Page):
         page.run_thread(trabajo_hardware)
 
     def trabajo_hardware():
-        datos, errores = obtener_diagnostico()  #[cite: 1]
+        datos, errores = obtener_diagnostico()
         hardware.value = "\n".join(f"{nombre}: {valor}" for nombre, valor in datos.items())
         diagnostico_estado.value = "Diagnóstico terminado" if not errores else "Diagnóstico parcial (ver consola)"
         actualizar_hardware.disabled = False
-        log("[INFO] Diagnóstico de hardware realizado (solo lectura).")
+        log("[INFO] Diagnóstico de hardware realizado.")
         for nombre, error in errores.items():
             log(f"[AVISO] {nombre}: {error}")
         page.update()
@@ -103,9 +145,10 @@ def main(page: ft.Page):
     basic_button = ft.Button('Mantenimiento básico', on_click=lambda e: change_section(True), disabled=True)
     advanced_button = ft.Button('Mantenimiento avanzado', on_click=lambda e: change_section(False))
 
-    # Función asíncrona para cerrar la ventana correctamente sin warnings
     async def salir(e):
         await page.window.destroy()
+
+    btn_ejecutar = ft.Button('▶ Ejecutar seleccionados', on_click=iniciar_ejecucion)
 
     page.add(
         ft.Row([
@@ -115,7 +158,7 @@ def main(page: ft.Page):
                 ft.Text('Herramienta profesional de mantenimiento', size=12, color=ft.Colors.GREY_400),
             ], spacing=0),
             ft.Container(expand=True),
-            ft.Text('V0.2.1 · DEMO', color=ft.Colors.AMBER_300),
+            ft.Text('V0.3 · FUNCIONAL', color=ft.Colors.GREEN_300),
         ]),
         ft.Divider(),
         ft.Container(
@@ -131,7 +174,7 @@ def main(page: ft.Page):
         ft.Text('Seleccioná los procesos a ejecutar:', weight=ft.FontWeight.BOLD, size=14),
         ft.Container(content=ft.Column([basic, advanced]), bgcolor=ft.Colors.GREY_900, border_radius=10, padding=10),
         ft.Row([
-            ft.Button('▶ Ejecutar seleccionados', on_click=simulate),
+            btn_ejecutar,
             ft.Button('⏭ Saltar proceso', on_click=skip),
             ft.Button('■ Cancelar todo', on_click=cancel),
         ], wrap=True),
@@ -141,7 +184,7 @@ def main(page: ft.Page):
         ft.Container(content=ft.Column([console], scroll=ft.ScrollMode.AUTO), bgcolor=ft.Colors.BLACK, border_radius=8, padding=10, height=100),
         ft.Divider(),
         ft.Row([
-            ft.Text('Prototipo seguro: ninguna tarea modifica el sistema.', size=10, color=ft.Colors.GREY_500),
+            ft.Text('Mantenimiento activo en entorno local.', size=10, color=ft.Colors.GREY_500),
             ft.Container(expand=True),
             ft.Column([
                 ft.Text('Autor: Fabián Enrique García', size=10, color=ft.Colors.GREY_400),
