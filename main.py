@@ -1,9 +1,10 @@
 import flet as ft
 from diagnostico import obtener_diagnostico
 import mantenimiento
+import reportes
 from datetime import datetime
 import ctypes
-import sys
+import os
 
 def es_administrador():
     try:
@@ -29,26 +30,28 @@ ADVANCED = [
 ]
 
 def main(page: ft.Page):
-    page.title = 'Taller PC - Mantenimiento y diagnóstico (V0.4)'
+    page.title = 'Taller PC - Mantenimiento y diagnóstico (V0.5)'
     page.theme_mode = ft.ThemeMode.DARK
     page.window.width = 780
     page.window.height = 910
     page.window.min_width = 650
     page.window.min_height = 700
     page.padding = 15
-    page.scroll = None  # Ventana fija sin scroll global
+    page.scroll = None
 
     checks = {}
     admin_status = "Administrador" if es_administrador() else "Usuario estándar"
     log_lines = [
-        '[INFO] Taller PC V0.4 iniciado.',
+        '[INFO] Taller PC V0.5 iniciado.',
         f'[INFO] Nivel de privilegios: {admin_status}.',
-        '[INFO] Contenedor de hardware con altura fija.'
+        '[INFO] Fila de acciones optimizada en una sola línea.'
     ]
     
     console = ft.Text('\n'.join(log_lines), font_family='Consolas', size=11, selectable=True)
-    status = ft.Text('Listo para ejecutar tareas...', color=ft.Colors.BLUE_200)
+    status = ft.Text('Listo para ejecutar tareas y generar reportes...', color=ft.Colors.BLUE_200)
     progress = ft.ProgressBar(value=0, height=6)
+
+    datos_hardware_actuales = {}
 
     def log(message):
         timestamp = datetime.now().strftime('%H:%M:%S')
@@ -129,7 +132,7 @@ def main(page: ft.Page):
             page.update()
 
         if 'dism' in selected_keys:
-            log('[INICIO] Ejecutando reparación de imagen DISM (puede tardar unos minutos)...')
+            log('[INICIO] Ejecutando reparación de imagen DISM...')
             exito, mensaje = mantenimiento.ejecutar_dism()
             log(f'[{"+" if exito else "!"}] {mensaje}')
             completadas += 1
@@ -159,6 +162,17 @@ def main(page: ft.Page):
         btn_ejecutar.disabled = False
         page.update()
 
+    def exportar_reporte(e):
+        log('[INICIO] Generando informe técnico en texto...')
+        exito, resultado = reportes.generar_reporte_txt(datos_hardware_actuales, log_lines)
+        if exito:
+            log(f'[+] Reporte guardado con éxito en: {resultado}')
+            status.value = f'Reporte guardado: {os.path.basename(resultado)}'
+        else:
+            log(f'[!] Error al generar el reporte: {resultado}')
+            status.value = 'Error al generar reporte.'
+        page.update()
+
     def skip(e):
         log('[INFO] Proceso omitido por el usuario.')
 
@@ -175,7 +189,9 @@ def main(page: ft.Page):
         page.run_thread(trabajo_hardware)
 
     def trabajo_hardware():
+        nonlocal datos_hardware_actuales
         datos, errores = obtener_diagnostico()
+        datos_hardware_actuales = datos
         hardware.value = "\n".join(f"{nombre}: {valor}" for nombre, valor in datos.items())
         diagnostico_estado.value = "Diagnóstico terminado" if not errores else "Diagnóstico parcial"
         actualizar_hardware.disabled = False
@@ -190,7 +206,11 @@ def main(page: ft.Page):
     async def salir(e):
         await page.window.destroy()
 
-    btn_ejecutar = ft.Button('▶ Ejecutar seleccionados', on_click=iniciar_ejecucion)
+    # Botones con etiquetas optimizadas para garantizar que quepan en una sola fila
+    btn_ejecutar = ft.Button('▶ Ejecutar', on_click=iniciar_ejecucion)
+    btn_reporte = ft.Button('📄 Reporte', icon=ft.Icons.DESCRIPTION, on_click=exportar_reporte, color=ft.Colors.GREEN_ACCENT_200)
+    btn_saltar = ft.Button('⏭ Saltar', on_click=skip)
+    btn_cancelar = ft.Button('■ Cancelar todo', on_click=cancel)
 
     page.add(
         ft.Row([
@@ -200,10 +220,9 @@ def main(page: ft.Page):
                 ft.Text('Herramienta profesional de mantenimiento', size=12, color=ft.Colors.GREY_400),
             ], spacing=0),
             ft.Container(expand=True),
-            ft.Text('V0.4 · AVANZADO', color=ft.Colors.ORANGE_300),
+            ft.Text('V0.5 · REPORTES', color=ft.Colors.GREEN_400),
         ]),
         ft.Divider(),
-        # Contenedor de hardware con altura fija y scroll interno para evitar que mueva la ventana
         ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -214,7 +233,7 @@ def main(page: ft.Page):
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.Container(
                     content=ft.Column([hardware], scroll=ft.ScrollMode.AUTO),
-                    height=75,  # Altura fija para que no crezca la tarjeta de hardware
+                    height=75,
                 )
             ], spacing=3),
             bgcolor=ft.Colors.GREY_900, border_radius=10, padding=10,
@@ -222,15 +241,16 @@ def main(page: ft.Page):
         ft.Row([basic_button, advanced_button], wrap=True),
         ft.Text('Seleccioná los procesos a ejecutar:', weight=ft.FontWeight.BOLD, size=14),
         ft.Container(content=ft.Column([basic, advanced]), bgcolor=ft.Colors.GREY_900, border_radius=10, padding=10),
+        # Fila en una sola línea con espaciado ajustado
         ft.Row([
             btn_ejecutar,
-            ft.Button('⏭ Saltar proceso', on_click=skip),
-            ft.Button('■ Cancelar todo', on_click=cancel),
-        ], wrap=True),
+            btn_reporte,
+            btn_saltar,
+            btn_cancelar,
+        ], spacing=8),
         status,
         progress,
         ft.Text('Consola de actividad (Detallada)', weight=ft.FontWeight.BOLD, size=14),
-        # Consola de 120px con scroll interno propio
         ft.Container(
             content=ft.Column([console], scroll=ft.ScrollMode.AUTO), 
             bgcolor=ft.Colors.BLACK, 
