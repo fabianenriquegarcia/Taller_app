@@ -1,6 +1,15 @@
 import flet as ft
 from diagnostico import obtener_diagnostico
-import mantenimiento  # Importamos nuestro nuevo módulo funcional
+import mantenimiento
+from datetime import datetime
+import ctypes
+import sys
+
+def es_administrador():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except Exception:
+        return False
 
 BASIC = [
     ('temp', 'Limpieza de archivos temporales', True),
@@ -19,25 +28,31 @@ ADVANCED = [
     ('ram', 'Diagnóstico de memoria RAM', False),
 ]
 
-
 def main(page: ft.Page):
-    page.title = 'Taller PC - Mantenimiento y diagnóstico (V0.3)'
+    page.title = 'Taller PC - Mantenimiento y diagnóstico (V0.4)'
     page.theme_mode = ft.ThemeMode.DARK
-    page.window.width = 760
-    page.window.height = 970
+    page.window.width = 780
+    page.window.height = 910
     page.window.min_width = 650
     page.window.min_height = 700
     page.padding = 15
-    page.scroll = ft.ScrollMode.AUTO
+    page.scroll = None  # Ventana fija sin scroll global
 
     checks = {}
-    log_lines = ['[INFO] Taller PC V0.3 iniciado.', '[INFO] Mantenimiento básico funcional activado.']
+    admin_status = "Administrador" if es_administrador() else "Usuario estándar"
+    log_lines = [
+        '[INFO] Taller PC V0.4 iniciado.',
+        f'[INFO] Nivel de privilegios: {admin_status}.',
+        '[INFO] Contenedor de hardware con altura fija.'
+    ]
+    
     console = ft.Text('\n'.join(log_lines), font_family='Consolas', size=11, selectable=True)
-    status = ft.Text('Listo para ejecutar mantenimiento básico...', color=ft.Colors.BLUE_200)
+    status = ft.Text('Listo para ejecutar tareas...', color=ft.Colors.BLUE_200)
     progress = ft.ProgressBar(value=0, height=6)
 
     def log(message):
-        log_lines.append(message)
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        log_lines.append(f'[{timestamp}] {message}')
         console.value = '\n'.join(log_lines)
         page.update()
 
@@ -58,10 +73,9 @@ def main(page: ft.Page):
         advanced.visible = not is_basic
         basic_button.disabled = is_basic
         advanced_button.disabled = not is_basic
-        status.value = 'Mantenimiento básico' if is_basic else 'Mantenimiento avanzado (en desarrollo).'
+        status.value = 'Mantenimiento básico' if is_basic else 'Mantenimiento avanzado (requiere permisos de Admin).'
         page.update()
 
-    # --- MOTOR DE EJECUCIÓN V0.3 ---
     is_running = [False]
 
     def iniciar_ejecucion(e):
@@ -75,41 +89,72 @@ def main(page: ft.Page):
             log('[AVISO] Seleccioná al menos una tarea.')
             return
 
-        if not basic.visible:
-            log('[AVISO] Las tareas avanzadas se habilitarán en la siguiente versión (V0.4).')
-            return
-
         is_running[0] = True
         btn_ejecutar.disabled = True
-        status.value = 'Ejecutando mantenimiento...'
-        progress.value = 0.2
+        status.value = 'Ejecutando mantenimiento en segundo plano...'
+        progress.value = 0.1
         page.update()
 
-        # Ejecutamos en un hilo independiente para no congelar la UI de Flet
-        page.run_thread(lambda: procesar_tareas_basicas(selected_keys))
+        page.run_thread(lambda: procesar_tareas(selected_keys, es_basico=basic.visible))
 
-    def procesar_tareas_basicas(selected_keys):
-        log(f'\n--- INICIANDO RUTINA BÁSICA ---')
+    def procesar_tareas(selected_keys, es_basico):
+        tipo = "BÁSICA" if es_basico else "AVANZADA"
+        log(f'=== INICIANDO RUTINA {tipo} ({len(selected_keys)} TAREAS) ===')
         
+        total = len(selected_keys)
+        completadas = 0
+
         if 'temp' in selected_keys:
-            log('[->] Purgando archivos temporales...')
-            _, mensaje = mantenimiento.ejecutar_limpieza_temp()
-            log(f'[+] {mensaje}')
+            log('[INICIO] Purgando archivos temporales del sistema...')
+            exito, mensaje = mantenimiento.ejecutar_limpieza_temp()
+            log(f'[{"+" if exito else "!"}] {mensaje}')
+            completadas += 1
+            progress.value = completadas / total
+            page.update()
 
         if 'recycle' in selected_keys:
-            log('[->] Vaciando papelera de reciclaje...')
-            _, mensaje = mantenimiento.vaciar_papelera()
-            log(f'[+] {mensaje}')
+            log('[INICIO] Vaciando papelera de reciclaje...')
+            exito, mensaje = mantenimiento.vaciar_papelera()
+            log(f'[{"+" if exito else "!"}] {mensaje}')
+            completadas += 1
+            progress.value = completadas / total
+            page.update()
 
-        if 'browser' in selected_keys:
-            log('[->] Limpieza de navegadores (Pendiente de integración en V0.3.1).')
+        if 'defender' in selected_keys:
+            log('[INICIO] Actualizando firmas de seguridad de Windows Defender...')
+            exito, mensaje = mantenimiento.actualizar_defender()
+            log(f'[{"+" if exito else "!"}] {mensaje}')
+            completadas += 1
+            progress.value = completadas / total
+            page.update()
 
-        if 'startup_audit' in selected_keys:
-            log('[->] Auditoría de programas de inicio completada (Modo seguro).')
+        if 'dism' in selected_keys:
+            log('[INICIO] Ejecutando reparación de imagen DISM (puede tardar unos minutos)...')
+            exito, mensaje = mantenimiento.ejecutar_dism()
+            log(f'[{"+" if exito else "!"}] {mensaje}')
+            completadas += 1
+            progress.value = completadas / total
+            page.update()
+
+        if 'sfc' in selected_keys:
+            log('[INICIO] Verificando archivos de sistema con SFC /scannow...')
+            exito, mensaje = mantenimiento.ejecutar_sfc()
+            log(f'[{"+" if exito else "!"}] {mensaje}')
+            completadas += 1
+            progress.value = completadas / total
+            page.update()
+
+        if 'disk' in selected_keys:
+            log('[INICIO] Analizando integridad de la unidad C: mediante CHKDSK...')
+            exito, mensaje = mantenimiento.ejecutar_chkdsk()
+            log(f'[{"+" if exito else "!"}] {mensaje}')
+            completadas += 1
+            progress.value = completadas / total
+            page.update()
 
         progress.value = 1.0
-        status.value = '¡Mantenimiento básico finalizado con éxito!'
-        log('--- RUTINA FINALIZADA ---\n')
+        status.value = '¡Procesos completados con éxito!'
+        log(f'=== RUTINA {tipo} FINALIZADA ===\n')
         is_running[0] = False
         btn_ejecutar.disabled = False
         page.update()
@@ -118,9 +163,8 @@ def main(page: ft.Page):
         log('[INFO] Proceso omitido por el usuario.')
 
     def cancel(e):
-        log('[INFO] Solicitud de cancelación registrada.')
+        log('[INFO] Solicitud de cancelación recibida.')
 
-    # Diagnóstico de hardware
     hardware = ft.Text("Todavía no se consultó el equipo.", selectable=True, size=11)
     diagnostico_estado = ft.Text("Pendiente", color=ft.Colors.GREY_400, size=11)
     
@@ -133,11 +177,9 @@ def main(page: ft.Page):
     def trabajo_hardware():
         datos, errores = obtener_diagnostico()
         hardware.value = "\n".join(f"{nombre}: {valor}" for nombre, valor in datos.items())
-        diagnostico_estado.value = "Diagnóstico terminado" if not errores else "Diagnóstico parcial (ver consola)"
+        diagnostico_estado.value = "Diagnóstico terminado" if not errores else "Diagnóstico parcial"
         actualizar_hardware.disabled = False
-        log("[INFO] Diagnóstico de hardware realizado.")
-        for nombre, error in errores.items():
-            log(f"[AVISO] {nombre}: {error}")
+        log("[INFO] Diagnóstico de hardware completado.")
         page.update()
 
     actualizar_hardware = ft.Button("Actualizar diagnóstico", icon=ft.Icons.REFRESH, on_click=cargar_hardware)
@@ -158,16 +200,23 @@ def main(page: ft.Page):
                 ft.Text('Herramienta profesional de mantenimiento', size=12, color=ft.Colors.GREY_400),
             ], spacing=0),
             ft.Container(expand=True),
-            ft.Text('V0.3 · FUNCIONAL', color=ft.Colors.GREEN_300),
+            ft.Text('V0.4 · AVANZADO', color=ft.Colors.ORANGE_300),
         ]),
         ft.Divider(),
+        # Contenedor de hardware con altura fija y scroll interno para evitar que mueva la ventana
         ft.Container(
             content=ft.Column([
-                ft.Text("Información del equipo", weight=ft.FontWeight.BOLD, size=14),
-                actualizar_hardware,
-                diagnostico_estado,
-                hardware,
-            ], spacing=5),
+                ft.Row([
+                    ft.Text("Información del equipo", weight=ft.FontWeight.BOLD, size=14),
+                    ft.Container(expand=True),
+                    actualizar_hardware,
+                    diagnostico_estado,
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(
+                    content=ft.Column([hardware], scroll=ft.ScrollMode.AUTO),
+                    height=75,  # Altura fija para que no crezca la tarjeta de hardware
+                )
+            ], spacing=3),
             bgcolor=ft.Colors.GREY_900, border_radius=10, padding=10,
         ),
         ft.Row([basic_button, advanced_button], wrap=True),
@@ -180,11 +229,18 @@ def main(page: ft.Page):
         ], wrap=True),
         status,
         progress,
-        ft.Text('Consola de actividad', weight=ft.FontWeight.BOLD, size=14),
-        ft.Container(content=ft.Column([console], scroll=ft.ScrollMode.AUTO), bgcolor=ft.Colors.BLACK, border_radius=8, padding=10, height=100),
+        ft.Text('Consola de actividad (Detallada)', weight=ft.FontWeight.BOLD, size=14),
+        # Consola de 120px con scroll interno propio
+        ft.Container(
+            content=ft.Column([console], scroll=ft.ScrollMode.AUTO), 
+            bgcolor=ft.Colors.BLACK, 
+            border_radius=8, 
+            padding=10, 
+            height=120
+        ),
         ft.Divider(),
         ft.Row([
-            ft.Text('Mantenimiento activo en entorno local.', size=10, color=ft.Colors.GREY_500),
+            ft.Text(f'Modo: {admin_status}', size=10, color=ft.Colors.GREY_500),
             ft.Container(expand=True),
             ft.Column([
                 ft.Text('Autor: Fabián Enrique García', size=10, color=ft.Colors.GREY_400),
@@ -194,7 +250,6 @@ def main(page: ft.Page):
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
     )
     cargar_hardware()
-
 
 if __name__ == '__main__':
     ft.run(main)
