@@ -30,7 +30,8 @@ ADVANCED = [
 ]
 
 def main(page: ft.Page):
-    page.title = 'Taller PC - Mantenimiento y diagnóstico (V0.5)'
+    # Actualizado a V1.0 Oficial
+    page.title = 'Taller PC - Mantenimiento y diagnóstico (V1.0)'
     page.theme_mode = ft.ThemeMode.DARK
     page.window.width = 780
     page.window.height = 910
@@ -42,9 +43,9 @@ def main(page: ft.Page):
     checks = {}
     admin_status = "Administrador" if es_administrador() else "Usuario estándar"
     log_lines = [
-        '[INFO] Taller PC V0.5 iniciado.',
+        '[INFO] Taller PC V1.0 iniciado.',
         f'[INFO] Nivel de privilegios: {admin_status}.',
-        '[INFO] Fila de acciones optimizada en una sola línea.'
+        '[INFO] Aplicación lista para pruebas de campo.'
     ]
     
     console = ft.Text('\n'.join(log_lines), font_family='Consolas', size=11, selectable=True)
@@ -206,7 +207,6 @@ def main(page: ft.Page):
     async def salir(e):
         await page.window.destroy()
 
-    # Botones con etiquetas optimizadas para garantizar que quepan en una sola fila
     btn_ejecutar = ft.Button('▶ Ejecutar', on_click=iniciar_ejecucion)
     btn_reporte = ft.Button('📄 Reporte', icon=ft.Icons.DESCRIPTION, on_click=exportar_reporte, color=ft.Colors.GREEN_ACCENT_200)
     btn_saltar = ft.Button('⏭ Saltar', on_click=skip)
@@ -220,7 +220,8 @@ def main(page: ft.Page):
                 ft.Text('Herramienta profesional de mantenimiento', size=12, color=ft.Colors.GREY_400),
             ], spacing=0),
             ft.Container(expand=True),
-            ft.Text('V0.5 · REPORTES', color=ft.Colors.GREEN_400),
+            # Etiqueta visual actualizada a V1.0 RELEASE
+            ft.Text('V1.0 · RELEASE', color=ft.Colors.CYAN_ACCENT_400),
         ]),
         ft.Divider(),
         ft.Container(
@@ -241,7 +242,6 @@ def main(page: ft.Page):
         ft.Row([basic_button, advanced_button], wrap=True),
         ft.Text('Seleccioná los procesos a ejecutar:', weight=ft.FontWeight.BOLD, size=14),
         ft.Container(content=ft.Column([basic, advanced]), bgcolor=ft.Colors.GREY_900, border_radius=10, padding=10),
-        # Fila en una sola línea con espaciado ajustado
         ft.Row([
             btn_ejecutar,
             btn_reporte,

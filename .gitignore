@@ -219,9 +219,18 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-
+# Entorno virtual
 .venv/
-__pycache__/
-*.pyc
+venv/
+
+# PyInstaller (archivos temporales y carpetas de salida)
 build/
 dist/
+*.spec
+
+# Reportes locales de prueba
+Reportes/
+
+# Caché de Python
+__pycache__/
+*.pyc
