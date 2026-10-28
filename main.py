@@ -29,6 +29,16 @@ ADVANCED = [
     ('ram', 'Diagnóstico de memoria RAM', False),
 ]
 
+TAREAS = {
+    'temp':     ('Purgando temporales',   mantenimiento.ejecutar_limpieza_temp),
+    'recycle':  ('Vaciando papelera',     mantenimiento.vaciar_papelera),
+    'defender': ('Actualizando Defender', mantenimiento.actualizar_defender),
+    'dism':     ('Reparación DISM',       mantenimiento.ejecutar_dism),
+    'sfc':      ('Verificación SFC',      mantenimiento.ejecutar_sfc),
+    'disk':     ('Escaneo CHKDSK',        mantenimiento.ejecutar_chkdsk),
+}
+REQUIEREN_ADMIN = {'dism', 'sfc', 'disk'}
+
 def main(page: ft.Page):
     # Actualizado a V1.0 Oficial
     page.title = 'Taller PC - Mantenimiento y diagnóstico (V1.0)'
@@ -63,7 +73,12 @@ def main(page: ft.Page):
     def make_tasks(items):
         controls = []
         for key, label, default in items:
-            check = ft.Checkbox(label=label, value=default)
+            implementado = key in TAREAS
+            check = ft.Checkbox(
+                label=label if implementado else f'{label} (próximamente)',
+                value=default and implementado,
+                disabled=not implementado,
+            )
             checks[key] = check
             controls.append(check)
         return ft.Column(controls, spacing=1)
@@ -104,64 +119,32 @@ def main(page: ft.Page):
     def procesar_tareas(selected_keys, es_basico):
         tipo = "BÁSICA" if es_basico else "AVANZADA"
         log(f'=== INICIANDO RUTINA {tipo} ({len(selected_keys)} TAREAS) ===')
-        
-        total = len(selected_keys)
-        completadas = 0
-
-        if 'temp' in selected_keys:
-            log('[INICIO] Purgando archivos temporales del sistema...')
-            exito, mensaje = mantenimiento.ejecutar_limpieza_temp()
-            log(f'[{"+" if exito else "!"}] {mensaje}')
-            completadas += 1
-            progress.value = completadas / total
+        ok = fallo = omitidas = 0
+        try:
+            for i, key in enumerate(selected_keys, 1):
+                if key not in TAREAS:
+                    log(f'[~] "{key}" no está implementado, se omite.')
+                    omitidas += 1
+                elif key in REQUIEREN_ADMIN and not es_administrador():
+                    log(f'[!] "{key}" requiere administrador, se omite.')
+                    omitidas += 1
+                else:
+                    titulo, funcion = TAREAS[key]
+                    log(f'[INICIO] {titulo}...')
+                    exito, mensaje = funcion()
+                    log(f'[{"+" if exito else "!"}] {mensaje}')
+                    if exito:
+                        ok += 1
+                    else:
+                        fallo += 1
+                progress.value = i / len(selected_keys)
+                page.update()
+            status.value = f'Terminado: {ok} OK, {fallo} con error, {omitidas} omitidas.'
+            log(f'=== RUTINA {tipo} FINALIZADA: {status.value} ===')
+        finally:
+            is_running[0] = False
+            btn_ejecutar.disabled = False
             page.update()
-
-        if 'recycle' in selected_keys:
-            log('[INICIO] Vaciando papelera de reciclaje...')
-            exito, mensaje = mantenimiento.vaciar_papelera()
-            log(f'[{"+" if exito else "!"}] {mensaje}')
-            completadas += 1
-            progress.value = completadas / total
-            page.update()
-
-        if 'defender' in selected_keys:
-            log('[INICIO] Actualizando firmas de seguridad de Windows Defender...')
-            exito, mensaje = mantenimiento.actualizar_defender()
-            log(f'[{"+" if exito else "!"}] {mensaje}')
-            completadas += 1
-            progress.value = completadas / total
-            page.update()
-
-        if 'dism' in selected_keys:
-            log('[INICIO] Ejecutando reparación de imagen DISM...')
-            exito, mensaje = mantenimiento.ejecutar_dism()
-            log(f'[{"+" if exito else "!"}] {mensaje}')
-            completadas += 1
-            progress.value = completadas / total
-            page.update()
-
-        if 'sfc' in selected_keys:
-            log('[INICIO] Verificando archivos de sistema con SFC /scannow...')
-            exito, mensaje = mantenimiento.ejecutar_sfc()
-            log(f'[{"+" if exito else "!"}] {mensaje}')
-            completadas += 1
-            progress.value = completadas / total
-            page.update()
-
-        if 'disk' in selected_keys:
-            log('[INICIO] Analizando integridad de la unidad C: mediante CHKDSK...')
-            exito, mensaje = mantenimiento.ejecutar_chkdsk()
-            log(f'[{"+" if exito else "!"}] {mensaje}')
-            completadas += 1
-            progress.value = completadas / total
-            page.update()
-
-        progress.value = 1.0
-        status.value = '¡Procesos completados con éxito!'
-        log(f'=== RUTINA {tipo} FINALIZADA ===\n')
-        is_running[0] = False
-        btn_ejecutar.disabled = False
-        page.update()
 
     def exportar_reporte(e):
         log('[INICIO] Generando informe técnico en texto...')

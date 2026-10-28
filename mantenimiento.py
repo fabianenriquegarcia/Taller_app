@@ -83,8 +83,11 @@ def ejecutar_chkdsk():
     try:
         res = subprocess.run(
             ["chkdsk.exe", "C:"],
-            capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            capture_output=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
         )
-        return True, "Análisis de integridad de disco C: (CHKDSK) completado."
+        if res.returncode == 0:
+            return True, "CHKDSK: no se encontraron errores en C:."
+        return False, f"CHKDSK terminó con código {res.returncode} (3 = errores sin corregir o sin permisos)."
     except Exception as e:
         return False, f"Error al ejecutar CHKDSK: {e}"
